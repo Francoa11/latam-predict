@@ -1,0 +1,39 @@
+{
+  "_format": "hh3-sol-build-info-1",
+  "id": "solc-0_8_28-0d750e9e89715027d012bc6a8a1585b52b6f320c",
+  "solcVersion": "0.8.28",
+  "solcLongVersion": "0.8.28+commit.7893614a",
+  "userSourceNameMap": {
+    "contracts/PredictionMarket.sol": "project/contracts/PredictionMarket.sol"
+  },
+  "input": {
+    "language": "Solidity",
+    "settings": {
+      "evmVersion": "cancun",
+      "optimizer": {
+        "enabled": true,
+        "runs": 200
+      },
+      "outputSelection": {
+        "*": {
+          "": [
+            "ast"
+          ],
+          "*": [
+            "abi",
+            "evm.bytecode",
+            "evm.deployedBytecode",
+            "evm.methodIdentifiers",
+            "metadata"
+          ]
+        }
+      },
+      "remappings": []
+    },
+    "sources": {
+      "project/contracts/PredictionMarket.sol": {
+        "content": "// SPDX-License-Identifier: MIT\r\npragma solidity ^0.8.20;\r\n\r\ncontract PredictionMarket {\r\n    struct Market {\r\n        uint256 id;\r\n        string question;\r\n        uint256 yesVotes;\r\n        uint256 noVotes;\r\n        bool resolved;\r\n        uint8 outcome; // 0: NO, 1: YES\r\n    }\r\n\r\n    mapping(uint256 => Market) public markets;\r\n    uint256 public nextMarketId;\r\n\r\n    // Crea los mercados de tus pantallas (Inflación, River, etc.)\r\n    function createMarket(string memory _question) external {\r\n        markets[nextMarketId] = Market(nextMarketId, _question, 0, 0, false, 0);\r\n        nextMarketId++;\r\n    }\r\n\r\n    // Procesa las apuestas reales\r\n    function buyShares(uint256 _marketId, uint8 _side) external payable {\r\n        require(msg.value > 0, \"Envia fondos\");\r\n        if (_side == 1) {\r\n            markets[_marketId].yesVotes += msg.value;\r\n        } else {\r\n            markets[_marketId].noVotes += msg.value;\r\n        }\r\n    }\r\n\r\n    // Envía los datos a tus tarjetas del frontend\r\n    function allMarkets() external view returns (Market[] memory) {\r\n        Market[] memory m = new Market[](nextMarketId);\r\n        for (uint i = 0; i < nextMarketId; i++) {\r\n            m[i] = markets[i];\r\n        }\r\n        return m;\r\n    }\r\n}"
+      }
+    }
+  }
+}
