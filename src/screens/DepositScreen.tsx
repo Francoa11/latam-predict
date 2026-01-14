@@ -6,30 +6,35 @@ import { ethers } from 'ethers';
 
 const DepositScreen: React.FC = () => {
     const navigate = useNavigate();
-    const { contract, account } = useBlockchain();
+    const { account, getERC20Contract, USDT_ADDRESS, USDC_ADDRESS } = useBlockchain();
     const { showToast } = useToast();
 
-    const [sepoliaBal, setSepoliaBal] = useState("0.0000");
-    const [polygonBal, setPolygonBal] = useState("0.0000");
+    const [usdtBal, setUsdtBal] = useState("0.00");
+    const [usdcBal, setUsdcBal] = useState("0.00");
+    const [maticBal, setMaticBal] = useState("0.00");
     const [loading, setLoading] = useState(false);
-    const [activeTab, setActiveTab] = useState<'sepolia' | 'polygon'>('sepolia');
 
-    // Fetch Balances Multi-Chain
+    // Fetch Balances on Polygon Mainnet
     useEffect(() => {
         const fetchBalances = async () => {
             if (account) {
                 try {
                     setLoading(true);
+                    const provider = new ethers.JsonRpcProvider('https://polygon-rpc.com');
 
-                    // 1. Sepolia Balance (Direct RPC to avoid network switch issues)
-                    const sepProvider = new ethers.JsonRpcProvider('https://rpc.sepolia.org');
-                    const sepBal = await sepProvider.getBalance(account);
-                    setSepoliaBal(Number(ethers.formatEther(sepBal)).toFixed(4));
+                    // 1. Native MATIC balance
+                    const mBal = await provider.getBalance(account);
+                    setMaticBal(Number(ethers.formatEther(mBal)).toFixed(2));
 
-                    // 2. Polygon Amoy Balance
-                    const polProvider = new ethers.JsonRpcProvider('https://rpc-amoy.polygon.technology');
-                    const polBal = await polProvider.getBalance(account);
-                    setPolygonBal(Number(ethers.formatEther(polBal)).toFixed(4));
+                    // 2. USDT Balance (6 decimals)
+                    const usdtContract = getERC20Contract(USDT_ADDRESS, provider);
+                    const uBalance = await usdtContract.balanceOf(account);
+                    setUsdtBal(Number(ethers.formatUnits(uBalance, 6)).toFixed(2));
+
+                    // 3. USDC Balance (6 decimals)
+                    const usdcContract = getERC20Contract(USDC_ADDRESS, provider);
+                    const cBalance = await usdcContract.balanceOf(account);
+                    setUsdcBal(Number(ethers.formatUnits(cBalance, 6)).toFixed(2));
 
                 } catch (error) {
                     console.error("Error fetching balances:", error);
@@ -40,70 +45,76 @@ const DepositScreen: React.FC = () => {
         };
 
         fetchBalances();
-        const interval = setInterval(fetchBalances, 10000);
+        const interval = setInterval(fetchBalances, 15000);
         return () => clearInterval(interval);
-    }, [account]);
+    }, [account, getERC20Contract, USDT_ADDRESS, USDC_ADDRESS]);
 
     const handleCopy = () => {
         if (account) {
             navigator.clipboard.writeText(account);
-            showToast("✅ Dirección copiada al portapapeles");
+            showToast("✅ Dirección copiada");
         }
     };
 
     return (
         <div className="min-h-screen bg-[#0b0d10] flex flex-col text-white">
-            <header className="flex items-center p-4 border-b border-white/5 bg-[#0b0d10] sticky top-0 z-10">
+            <header className="flex items-center p-4 border-b border-white/5 bg-[#0b0d10] sticky top-0 z-10 w-full max-w-[480px] mx-auto">
                 <button onClick={() => navigate(-1)} className="p-2 -ml-2 rounded-full hover:bg-white/5 transition-colors">
                     <span className="material-symbols-outlined text-slate-400">arrow_back</span>
                 </button>
                 <h1 className="flex-1 text-center font-bold text-lg pr-8">Depositar Fondos</h1>
             </header>
 
-            <main className="flex-1 p-6 flex flex-col items-center">
+            <main className="flex-1 p-6 flex flex-col items-center w-full max-w-[480px] mx-auto">
 
-                {/* Network Switcher */}
-                <div className="flex bg-[#15171b] p-1 rounded-xl mb-6 border border-white/5 w-full max-w-[320px]">
-                    <button
-                        onClick={() => setActiveTab('sepolia')}
-                        className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-xs font-bold transition-all ${activeTab === 'sepolia' ? 'bg-[#25282e] text-white shadow-sm' : 'text-slate-500 hover:text-slate-300'}`}
-                    >
-                        <span className="w-2 h-2 rounded-full bg-blue-500"></span> Sepolia (ETH)
-                    </button>
-                    <button
-                        onClick={() => setActiveTab('polygon')}
-                        className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-xs font-bold transition-all ${activeTab === 'polygon' ? 'bg-[#25282e] text-white shadow-sm' : 'text-slate-500 hover:text-slate-300'}`}
-                    >
-                        <span className="w-2 h-2 rounded-full bg-purple-500"></span> Polygon (MAT)
-                    </button>
+                <div className="w-full text-center mb-8">
+                    <span className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] px-4 py-1.5 rounded-full border border-white/5 bg-white/5">
+                        Red Polygon Mainnet
+                    </span>
                 </div>
 
-                {/* Balance Display */}
-                <div className="w-full max-w-[320px] mb-8 text-center">
-                    <span className="text-xs font-bold text-slate-500 uppercase tracking-widest px-3 py-1 rounded-full border border-white/5">
-                        Saldo en {activeTab === 'sepolia' ? 'Ethereum Sepolia' : 'Polygon Amoy'}
-                    </span>
-                    <div className="mt-4 flex flex-col items-center animate-fade-in" key={activeTab}>
-                        <h2 className="text-4xl font-black text-white tracking-tight flex items-center gap-2">
-                            <span className={`text-2xl ${activeTab === 'sepolia' ? 'text-blue-500' : 'text-purple-500'}`}>
-                                {activeTab === 'sepolia' ? 'Ξ' : '⬡'}
-                            </span>
-                            {loading ? <span className="animate-pulse opacity-50">...</span> : (activeTab === 'sepolia' ? sepoliaBal : polygonBal)}
-                        </h2>
-                        <span className="text-sm text-slate-500 font-medium mt-1">
-                            {activeTab === 'sepolia' ? 'ETH' : 'MATIC / POL'}
-                        </span>
+                {/* Balances Card */}
+                <div className="w-full bg-[#15171b] border border-white/5 rounded-3xl p-6 mb-8 shadow-xl">
+                    <div className="space-y-4">
+                        <div className="flex justify-between items-center">
+                            <div className="flex items-center gap-3">
+                                <div className="w-8 h-8 rounded-full bg-emerald-500/20 flex items-center justify-center text-emerald-500">
+                                    <span className="material-symbols-outlined text-[20px]">attach_money</span>
+                                </div>
+                                <span className="font-bold text-slate-300">USDT</span>
+                            </div>
+                            <span className="text-xl font-black">{loading ? "..." : `$${usdtBal}`}</span>
+                        </div>
+                        <div className="flex justify-between items-center">
+                            <div className="flex items-center gap-3">
+                                <div className="w-8 h-8 rounded-full bg-blue-500/20 flex items-center justify-center text-blue-500">
+                                    <span className="material-symbols-outlined text-[20px]">monetization_on</span>
+                                </div>
+                                <span className="font-bold text-slate-300">USDC</span>
+                            </div>
+                            <span className="text-xl font-black">{loading ? "..." : `$${usdcBal}`}</span>
+                        </div>
+                        <div className="flex justify-between items-center pt-2 border-t border-white/5">
+                            <div className="flex items-center gap-3">
+                                <div className="w-8 h-8 rounded-full bg-purple-500/20 flex items-center justify-center text-purple-500">
+                                    <span className="material-symbols-outlined text-[18px]">token</span>
+                                </div>
+                                <span className="font-bold text-slate-500">POL (Gas)</span>
+                            </div>
+                            <span className="text-sm font-bold text-slate-400">{loading ? "..." : `${maticBal} POL`}</span>
+                        </div>
                     </div>
                 </div>
 
-                <div className="w-full max-w-[320px] bg-[#15171b] rounded-2xl p-6 border border-white/5 shadow-2xl flex flex-col items-center mb-8 relative overflow-hidden">
-                    {/* Glow effect dynamic color */}
-                    <div className={`absolute top-[-50%] left-[20%] w-[200px] h-[200px] blur-[80px] pointer-events-none transition-colors duration-500 ${activeTab === 'sepolia' ? 'bg-blue-600/10' : 'bg-purple-600/10'}`}></div>
+                {/* QR Section */}
+                <div className="w-full bg-[#1a1d21] rounded-[32px] p-8 border border-white/5 shadow-2xl flex flex-col items-center mb-8 relative overflow-hidden">
+                    <div className="absolute top-[-20%] left-[-20%] w-[150px] h-[150px] bg-blue-600/10 rounded-full blur-[60px] pointer-events-none"></div>
 
-                    <span className="text-sm font-bold text-slate-400 mb-4">Tu Dirección {activeTab === 'polygon' ? '(Soporta USDT/USDC)' : ''}</span>
+                    <span className="text-xs font-black text-slate-500 uppercase tracking-widest mb-6 px-1 text-center">
+                        Envía tokens (USDT/USDC/POL) a esta dirección en la red Polygon
+                    </span>
 
-                    {/* QR Placeholder */}
-                    <div className="w-48 h-48 bg-white rounded-xl mb-6 p-2 shadow-inner z-10 transition-transform hover:scale-[1.02]">
+                    <div className="w-48 h-48 bg-white rounded-3xl mb-8 p-3 shadow-2xl z-10">
                         <img
                             src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${account}`}
                             alt="Wallet QR"
@@ -111,36 +122,25 @@ const DepositScreen: React.FC = () => {
                         />
                     </div>
 
-                    <div className="w-full bg-[#0b0d10] rounded-xl p-3 flex items-center justify-between gap-2 border border-white/10 mb-4 group cursor-pointer z-10 active:scale-95 transition-transform" onClick={handleCopy}>
-                        <code className="text-xs text-slate-300 font-mono truncate flex-1 block">
+                    <div
+                        className="w-full bg-[#0b0d10] rounded-2xl p-4 flex items-center justify-between gap-3 border border-white/10 group cursor-pointer active:scale-[0.98] transition-all z-10"
+                        onClick={handleCopy}
+                    >
+                        <code className="text-[11px] text-slate-300 font-mono truncate flex-1 font-bold">
                             {account || "Cargando..."}
                         </code>
-                        <span className="material-symbols-outlined text-slate-500 text-sm group-hover:text-white transition-colors">content_copy</span>
+                        <span className="material-symbols-outlined text-slate-500 text-lg group-hover:text-blue-400 transition-colors">content_copy</span>
                     </div>
                 </div>
 
-                <div className="w-full max-w-[320px] space-y-3">
-                    {activeTab === 'sepolia' ? (
-                        <div className="bg-blue-600/10 border border-blue-500/20 p-4 rounded-xl flex items-start gap-3 animate-fade-in">
-                            <span className="material-symbols-outlined text-blue-400 mt-0.5 text-[20px]">info</span>
-                            <div>
-                                <h3 className="font-bold text-blue-400 text-sm mb-1">Red Sepolia (Testnet)</h3>
-                                <p className="text-xs text-blue-200/70 leading-relaxed">
-                                    Usa esta red para interactuar con los mercados y probar la plataforma sin riesgo.
-                                </p>
-                            </div>
-                        </div>
-                    ) : (
-                        <div className="bg-purple-600/10 border border-purple-500/20 p-4 rounded-xl flex items-start gap-3 animate-fade-in">
-                            <span className="material-symbols-outlined text-purple-400 mt-0.5 text-[20px]">currency_exchange</span>
-                            <div>
-                                <h3 className="font-bold text-purple-400 text-sm mb-1">Red Polygon (Amoy)</h3>
-                                <p className="text-xs text-purple-200/70 leading-relaxed">
-                                    Aquí puedes recibir <strong>MATIC, USDT y USDC</strong>. Tus activos aparecerán reflejados en tu balance total pronto.
-                                </p>
-                            </div>
-                        </div>
-                    )}
+                <div className="bg-blue-600/5 border border-blue-500/10 p-5 rounded-2xl flex items-start gap-4 w-full">
+                    <span className="material-symbols-outlined text-blue-400 text-[20px] shrink-0">info</span>
+                    <div className="flex flex-col gap-1">
+                        <p className="text-[11px] text-blue-200/60 font-medium leading-relaxed uppercase tracking-wider">Tip profesional</p>
+                        <p className="text-xs text-white/80 leading-relaxed font-bold">
+                            Necesitas una pequeña cantidad de <span className="text-purple-400">POL (antes MATIC)</span> para pagar el gas de tus transacciones.
+                        </p>
+                    </div>
                 </div>
 
             </main>

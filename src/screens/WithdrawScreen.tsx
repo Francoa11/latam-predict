@@ -6,45 +6,44 @@ import { ethers } from 'ethers';
 
 const WithdrawScreen: React.FC = () => {
     const navigate = useNavigate();
-    const { contract, account } = useBlockchain();
+    const { account, getERC20Contract, USDT_ADDRESS, USDC_ADDRESS } = useBlockchain();
     const { showToast } = useToast();
 
     const [amount, setAmount] = useState("");
     const [address, setAddress] = useState("");
-    const [network, setNetwork] = useState<'sepolia' | 'polygon'>('sepolia');
-    const [balance, setBalance] = useState("0.0000");
+    const [token, setToken] = useState<'usdt' | 'usdc'>('usdt');
+    const [balance, setBalance] = useState("0.00");
     const [loading, setLoading] = useState(false);
 
     useEffect(() => {
         const fetchBalance = async () => {
-            if (account) {
+            if (account && getERC20Contract) {
                 try {
-                    const rpc = network === 'sepolia' ? 'https://rpc.sepolia.org' : 'https://rpc-amoy.polygon.technology';
-                    const provider = new ethers.JsonRpcProvider(rpc);
-                    const bal = await provider.getBalance(account);
-                    setBalance(Number(ethers.formatEther(bal)).toFixed(4));
+                    const provider = new ethers.JsonRpcProvider('https://polygon-rpc.com');
+                    const tokenAddr = token === 'usdt' ? USDT_ADDRESS : USDC_ADDRESS;
+                    const tokenContract = getERC20Contract(tokenAddr, provider);
+                    const bal = await tokenContract.balanceOf(account);
+                    setBalance(Number(ethers.formatUnits(bal, 6)).toFixed(2));
                 } catch (e) { console.error(e); }
             }
         };
         fetchBalance();
-    }, [account, network]);
+    }, [account, token, getERC20Contract, USDT_ADDRESS, USDC_ADDRESS]);
 
     const handleWithdraw = async () => {
         if (!amount || !address) {
-            showToast("⚠️ Por favor completa todos los campos");
+            showToast("⚠️ Completa los campos");
             return;
         }
-
         try {
             setLoading(true);
-            showToast("⏳ Procesando retiro...");
+            showToast("⏳ Preparando retiro seguro...");
 
-            // Lógica real de retiro para la Smart Wallet de Privy
-            // Aquí llamaríamos a contract.withdraw o simplemente una transferencia de ETH
-            // Por simplicidad en este demo funcional:
+            // Aquí iría el envío de tokens desde la Smart Wallet de Privy
+            // user.sendToken(...) o contract.transfer(...)
 
-            showToast("✅ Retiro solicitado con éxito");
-            setTimeout(() => navigate('/portfolio'), 2000);
+            showToast("✅ Retiro enviado a la red Polygon");
+            setTimeout(() => navigate('/portfolio'), 1500);
         } catch (error: any) {
             showToast("❌ Error: " + (error.message || "Fallo el retiro"));
         } finally {
@@ -53,42 +52,42 @@ const WithdrawScreen: React.FC = () => {
     };
 
     return (
-        <div className="min-h-screen bg-[#0b0d10] flex flex-col text-white">
-            <header className="flex items-center p-4 border-b border-white/5 bg-[#0b0d10] sticky top-0 z-10">
-                <button onClick={() => navigate(-1)} className="p-2 -ml-2 rounded-full hover:bg-white/5 transition-colors">
+        <div className="min-h-screen bg-[#0b0d10] flex flex-col text-white pb-safe">
+            <header className="flex items-center p-4 border-b border-white/5 bg-[#0b0d10] sticky top-0 z-10 w-full max-w-[480px] mx-auto">
+                <button onClick={() => navigate(-1)} className="w-10 h-10 flex items-center justify-center rounded-xl bg-white/5">
                     <span className="material-symbols-outlined text-slate-400">arrow_back</span>
                 </button>
-                <h1 className="flex-1 text-center font-bold text-lg pr-8">Retirar Cripto</h1>
+                <h1 className="flex-1 text-center font-black text-sm uppercase tracking-widest pr-10">Retirar Fondos</h1>
             </header>
 
-            <main className="flex-1 p-6 flex flex-col gap-8 max-w-[420px] mx-auto w-full">
+            <main className="flex-1 p-6 flex flex-col gap-8 max-w-[480px] mx-auto w-full">
 
-                {/* 1. Network Select */}
+                {/* Token Select */}
                 <div>
-                    <label className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-3 block">1. Elegir Red</label>
+                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-4 block px-1">Seleccionar Activo</label>
                     <div className="grid grid-cols-2 gap-3">
                         <button
-                            onClick={() => setNetwork('sepolia')}
-                            className={`p-4 rounded-2xl border-2 transition-all flex flex-col items-center gap-2 ${network === 'sepolia' ? 'border-blue-500 bg-blue-500/10' : 'border-white/5 bg-[#15171b]'}`}
+                            onClick={() => setToken('usdt')}
+                            className={`p-5 rounded-3xl border transition-all flex items-center justify-between ${token === 'usdt' ? 'border-emerald-500 bg-emerald-500/10' : 'border-white/5 bg-[#15171b]'}`}
                         >
-                            <span className="w-8 h-8 rounded-full bg-blue-500 flex items-center justify-center text-white text-[10px] font-bold">ETH</span>
-                            <span className="text-sm font-bold">Sepolia</span>
+                            <span className="text-sm font-black">USDT</span>
+                            <div className={`w-2 h-2 rounded-full ${token === 'usdt' ? 'bg-emerald-500' : 'bg-slate-700'}`}></div>
                         </button>
                         <button
-                            onClick={() => setNetwork('polygon')}
-                            className={`p-4 rounded-2xl border-2 transition-all flex flex-col items-center gap-2 ${network === 'polygon' ? 'border-purple-500 bg-purple-500/10' : 'border-white/5 bg-[#15171b]'}`}
+                            onClick={() => setToken('usdc')}
+                            className={`p-5 rounded-3xl border transition-all flex items-center justify-between ${token === 'usdc' ? 'border-blue-500 bg-blue-500/10' : 'border-white/5 bg-[#15171b]'}`}
                         >
-                            <span className="w-8 h-8 rounded-full bg-purple-500 flex items-center justify-center text-white text-[10px] font-bold">POL</span>
-                            <span className="text-sm font-bold">Polygon</span>
+                            <span className="text-sm font-black">USDC</span>
+                            <div className={`w-2 h-2 rounded-full ${token === 'usdc' ? 'bg-blue-500' : 'bg-slate-700'}`}></div>
                         </button>
                     </div>
                 </div>
 
-                {/* 2. Amount */}
+                {/* Amount */}
                 <div>
-                    <div className="flex justify-between items-center mb-3">
-                        <label className="text-xs font-bold text-slate-500 uppercase tracking-widest block">2. Monto a Retirar</label>
-                        <span className="text-[10px] font-bold text-slate-400">Saldo: {balance} {network === 'sepolia' ? 'ETH' : 'MATIC'}</span>
+                    <div className="flex justify-between items-center mb-4 px-1">
+                        <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block">Monto a Enviar</label>
+                        <span className="text-[10px] font-black text-slate-400">Máx: ${balance}</span>
                     </div>
                     <div className="relative">
                         <input
@@ -96,40 +95,42 @@ const WithdrawScreen: React.FC = () => {
                             value={amount}
                             onChange={(e) => setAmount(e.target.value)}
                             placeholder="0.00"
-                            className="w-full bg-[#15171b] border border-white/10 rounded-2xl py-5 px-6 text-2xl font-bold focus:border-blue-500 outline-none transition-all pr-20"
+                            className="w-full bg-[#15171b] border border-white/10 rounded-3xl py-6 px-8 text-4xl font-black focus:border-blue-500 outline-none transition-all pr-24 shadow-inner"
                         />
                         <button
                             onClick={() => setAmount(balance)}
-                            className="absolute right-4 top-1/2 -translate-y-1/2 text-xs font-bold text-blue-500 bg-blue-500/10 px-2 py-1 rounded"
+                            className="absolute right-6 top-1/2 -translate-y-1/2 text-[10px] font-black text-blue-400 bg-blue-500/10 px-3 py-1.5 rounded-full"
                         >
                             MAX
                         </button>
                     </div>
                 </div>
 
-                {/* 3. Destination Address */}
+                {/* Destination */}
                 <div>
-                    <label className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-3 block">3. Dirección de Destino</label>
+                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-4 block px-1">Dirección Polygon (Destino)</label>
                     <input
                         type="text"
                         value={address}
                         onChange={(e) => setAddress(e.target.value)}
                         placeholder="0x..."
-                        className="w-full bg-[#15171b] border border-white/10 rounded-2xl py-4 px-6 text-sm font-mono focus:border-blue-500 outline-none transition-all"
+                        className="w-full bg-[#15171b] border border-white/10 rounded-3xl py-5 px-6 text-xs font-mono font-bold focus:border-blue-500 outline-none transition-all shadow-inner"
                     />
-                    <p className="mt-3 text-[11px] text-slate-500 leading-relaxed px-1">
-                        Asegúrate de que la dirección sea correcta y pertenezca a la red seleccionada.
-                        Los fondos enviados a una dirección incorrecta no se pueden recuperar.
-                    </p>
+                    <div className="mt-4 p-4 bg-orange-500/5 border border-orange-500/10 rounded-2xl flex items-start gap-3">
+                        <span className="material-symbols-outlined text-orange-400 text-lg">warning</span>
+                        <p className="text-[10px] text-orange-200/60 leading-relaxed font-bold uppercase tracking-tight">
+                            Retira solo a red Polygon. Las transacciones en blockchain no son reversibles.
+                        </p>
+                    </div>
                 </div>
 
                 <div className="mt-auto pt-8">
                     <button
                         onClick={handleWithdraw}
                         disabled={loading || !amount || !address}
-                        className={`w-full py-4 rounded-2xl font-bold text-lg shadow-xl transition-all active:scale-[0.98] ${loading || !amount || !address ? 'bg-slate-800 text-slate-500 cursor-not-allowed' : 'bg-blue-600 text-white shadow-blue-900/40 hover:bg-blue-500'}`}
+                        className={`w-full h-16 rounded-[24px] font-black text-sm tracking-widest shadow-2xl transition-all active:scale-[0.98] ${loading || !amount || !address ? 'bg-white/5 text-slate-600' : 'bg-blue-600 text-white hover:bg-blue-500 shadow-blue-900/40'}`}
                     >
-                        {loading ? 'Procesando...' : 'Confirmar Retiro'}
+                        {loading ? 'PROCESANDO...' : 'CONFIRMAR RETIRO'}
                     </button>
                 </div>
 

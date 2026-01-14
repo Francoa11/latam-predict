@@ -8,10 +8,10 @@ import { ethers } from 'ethers';
 const PortfolioScreen: React.FC = () => {
     const navigate = useNavigate();
     const { showToast } = useToast();
-    const { contract, account } = useBlockchain();
+    const { contract, account, getERC20Contract, USDT_ADDRESS, USDC_ADDRESS } = useBlockchain();
 
     const [activeTab, setActiveTab] = useState<'active' | 'history'>('active');
-    const [balance, setBalance] = useState("0.0000");
+    const [totalBal, setTotalBal] = useState("0.00");
     const [loading, setLoading] = useState(false);
 
     const [activeBets, setActiveBets] = useState<any[]>([]);
@@ -22,45 +22,52 @@ const PortfolioScreen: React.FC = () => {
             if (account) {
                 try {
                     setLoading(true);
+                    const provider = new ethers.JsonRpcProvider('https://polygon-rpc.com');
 
-                    // 1. Fetch Balance (Sepolia)
-                    const provider = new ethers.JsonRpcProvider('https://rpc.sepolia.org');
-                    const bal = await provider.getBalance(account);
-                    setBalance(Number(ethers.formatEther(bal)).toFixed(4));
+                    // 1. Fetch Balances
+                    const usdtContract = getERC20Contract(USDT_ADDRESS, provider);
+                    const usdcContract = getERC20Contract(USDC_ADDRESS, provider);
 
-                    // 2. Fetch User Bets from Blockchain
+                    const [uBal, cBal] = await Promise.all([
+                        usdtContract.balanceOf(account),
+                        usdcContract.balanceOf(account)
+                    ]);
+
+                    const total = Number(ethers.formatUnits(uBal, 6)) + Number(ethers.formatUnits(cBal, 6));
+                    setTotalBal(total.toFixed(2));
+
+                    // 2. Fetch User Bets
                     if (contract) {
-                        const totalMarkets = await contract.nextMarketId();
+                        const totalMarketsBN = await contract.nextMarketId();
+                        const totalMarkets = Number(totalMarketsBN);
                         const myBets = [];
 
-                        // Solo buscamos los últimos 20 para performance
-                        const start = Math.max(0, Number(totalMarkets) - 20);
+                        // Optimización: Solo buscamos los últimos 50
+                        const start = Math.max(0, totalMarkets - 50);
 
-                        for (let i = start; i < Number(totalMarkets); i++) {
-                            const market = await contract.markets(i);
-                            const yesShares = await contract.yesShares(i, account);
-                            const noShares = await contract.noShares(i, account);
+                        for (let i = start; i < totalMarkets; i++) {
+                            const [market, yesSharesBN, noSharesBN] = await Promise.all([
+                                contract.markets(i),
+                                contract.userYesShares(i, account),
+                                contract.userNoShares(i, account)
+                            ]);
 
-                            if (ethers.formatEther(yesShares) !== "0.0" || ethers.formatEther(noShares) !== "0.0") {
-                                const side = ethers.formatEther(yesShares) !== "0.0" ? "SÍ" : "NO";
-                                const amt = ethers.formatEther(yesShares) !== "0.0" ? yesShares : noShares;
+                            const yesShares = Number(ethers.formatUnits(yesSharesBN, 6));
+                            const noShares = Number(ethers.formatUnits(noSharesBN, 6));
 
+                            if (yesShares > 0 || noShares > 0) {
                                 myBets.push({
                                     id: i,
                                     title: market.question,
-                                    outcome: side,
-                                    amount: Number(ethers.formatEther(amt)).toFixed(4),
-                                    currentVal: Number(ethers.formatEther(amt)), // Simplificado
+                                    outcome: yesShares > 0 ? "SÍ" : "NO",
+                                    amount: (yesShares > 0 ? yesShares : noShares).toFixed(2),
                                     isLive: !market.resolved
                                 });
                             }
                         }
 
-                        const active = myBets.filter(b => b.isLive);
-                        const history = myBets.filter(b => !b.isLive);
-
-                        setActiveBets(active);
-                        setHistoryBets(history);
+                        setActiveBets(myBets.filter(b => b.isLive));
+                        setHistoryBets(myBets.filter(b => !b.isLive));
                     }
                 } catch (e) {
                     console.error("Error loading portfolio:", e);
@@ -71,130 +78,111 @@ const PortfolioScreen: React.FC = () => {
         };
 
         loadPortfolio();
-    }, [account, contract]);
-
-    const handleClosePosition = (e: React.MouseEvent) => {
-        e.stopPropagation();
-        showToast("Las posiciones se liquidan automáticamente al resolver el mercado");
-    };
+    }, [account, contract, getERC20Contract, USDT_ADDRESS, USDC_ADDRESS]);
 
     const EmptyState = ({ message, sub, icon }: { message: string, sub: string, icon: string }) => (
-        <div className="flex flex-col items-center justify-center py-20 text-center animate-fade-in px-8">
-            <div className="w-20 h-20 bg-[#1a1d21] rounded-full flex items-center justify-center mb-6 border border-white/5 shadow-inner">
-                <span className="material-symbols-outlined text-4xl text-slate-600">{icon}</span>
+        <div className="flex flex-col items-center justify-center py-24 text-center animate-fade-in px-8">
+            <div className="w-24 h-24 bg-[#15171b] rounded-[40px] flex items-center justify-center mb-8 border border-white/5 shadow-inner">
+                <span className="material-symbols-outlined text-5xl text-slate-700">{icon}</span>
             </div>
-            <h3 className="text-lg font-bold text-white mb-2">{message}</h3>
-            <p className="text-sm text-slate-400 leading-relaxed max-w-[240px] mb-8">{sub}</p>
+            <h3 className="text-xl font-black text-white mb-2">{message}</h3>
+            <p className="text-xs text-slate-500 leading-relaxed max-w-[240px] font-bold mb-10">{sub}</p>
             <button
-                onClick={() => navigate('/home')}
-                className="w-full py-3.5 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-500 transition-colors shadow-lg active:scale-[0.98]"
+                onClick={() => navigate('/')}
+                className="w-full h-14 bg-white text-black font-black text-sm tracking-widest rounded-2xl shadow-xl active:scale-95 transition-all"
             >
-                Explorar Mercados
+                EXPLORAR MERCADOS
             </button>
         </div>
     );
 
     return (
-        <div className="flex h-full min-h-screen w-full flex-col bg-[#0b0d10] text-white pb-24">
-            <header className="sticky top-0 z-20 flex items-center bg-[#0b0d10]/95 backdrop-blur-md px-4 py-3 border-b border-white/5 w-full">
-                <h2 className="text-lg font-bold flex-1 text-center">Mi Cartera</h2>
+        <div className="flex min-h-screen w-full flex-col bg-[#0b0d10] text-white pb-24">
+            <header className="sticky top-0 z-40 bg-[#0b0d10]/95 backdrop-blur-xl border-b border-white/5 px-6 h-[65px] flex items-center justify-between w-full max-w-[480px] mx-auto">
+                <h2 className="text-sm font-black uppercase tracking-[0.2em] w-full text-center">Mi Portafolio</h2>
             </header>
 
-            <div className="p-4 flex-1">
-                {/* Balance Summary - Card Style */}
-                <div className="bg-gradient-to-br from-[#1c2026] to-[#15171b] rounded-2xl p-6 border border-white/10 mb-6 shadow-xl relative overflow-hidden group">
-                    <div className="absolute -right-6 -top-6 p-4 opacity-[0.03] group-hover:opacity-[0.05] transition-opacity">
-                        <span className="material-symbols-outlined text-[140px]">account_balance_wallet</span>
+            <main className="flex-1 w-full max-w-[480px] mx-auto px-6 py-8">
+                {/* Balance Summary */}
+                <div className="bg-[#15171b] rounded-[36px] p-8 border border-white/5 mb-8 shadow-2xl relative overflow-hidden group">
+                    <div className="absolute -right-8 -top-8 p-4 opacity-[0.03] rotate-12">
+                        <span className="material-symbols-outlined text-[180px]">account_balance_wallet</span>
                     </div>
-                    <div className="relative z-10 flex flex-col items-center py-4">
-                        <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">Saldo Total (Sepolia)</span>
-                        <h2 className="text-4xl font-black text-white tracking-tight flex items-center gap-2">
-                            <span className="text-2xl text-blue-500">Ξ</span>
-                            {loading ? "..." : balance}
+                    <div className="relative z-10 flex flex-col items-center text-center">
+                        <span className="text-[10px] font-black text-slate-500 uppercase tracking-[0.3em] mb-3">Valor de la Cartera</span>
+                        <h2 className="text-5xl font-black text-white tracking-tighter mb-8">
+                            <span className="text-3xl text-blue-500 opacity-50 mr-1">$</span>
+                            {loading ? "..." : totalBal}
                         </h2>
-                        <div className="mt-6 flex gap-3 w-full">
-                            <button onClick={() => navigate('/deposit')} className="flex-1 bg-white/5 border border-white/10 py-2.5 rounded-xl text-xs font-bold hover:bg-white/10 transition-all flex items-center justify-center gap-2">
-                                <span className="material-symbols-outlined text-sm">add</span> Depositar
+                        <div className="grid grid-cols-2 gap-4 w-full">
+                            <button onClick={() => navigate('/deposit')} className="h-12 bg-white/5 hover:bg-white/10 border border-white/10 rounded-2xl text-[10px] font-black tracking-widest transition-all flex items-center justify-center gap-2">
+                                DEPOSITAR
                             </button>
-                            <button onClick={() => navigate('/withdraw')} className="flex-1 bg-white/5 border border-white/10 py-2.5 rounded-xl text-xs font-bold hover:bg-white/10 transition-all flex items-center justify-center gap-2">
-                                <span className="material-symbols-outlined text-sm">arrow_upward</span> Retirar
+                            <button onClick={() => navigate('/withdraw')} className="h-12 bg-white/5 hover:bg-white/10 border border-white/10 rounded-2xl text-[10px] font-black tracking-widest transition-all flex items-center justify-center gap-2">
+                                RETIRAR
                             </button>
                         </div>
                     </div>
                 </div>
 
                 {/* Tabs */}
-                <div className="flex p-1 bg-[#15171b] rounded-xl border border-white/5 mb-6">
+                <div className="flex p-1.5 bg-[#15171b] rounded-2xl border border-white/5 mb-8">
                     <button
                         onClick={() => setActiveTab('active')}
-                        className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${activeTab === 'active' ? 'bg-[#2a2e36] text-white shadow-sm' : 'text-slate-500 hover:text-slate-300'}`}
+                        className={`flex-1 py-3 text-xs font-black rounded-xl transition-all tracking-widest ${activeTab === 'active' ? 'bg-blue-600 text-white shadow-xl shadow-blue-900/40' : 'text-slate-500'}`}
                     >
-                        Predicciones ({activeBets.length})
+                        ACTIVAS ({activeBets.length})
                     </button>
                     <button
                         onClick={() => setActiveTab('history')}
-                        className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${activeTab === 'history' ? 'bg-[#2a2e36] text-white shadow-sm' : 'text-slate-500 hover:text-slate-300'}`}
+                        className={`flex-1 py-3 text-xs font-black rounded-xl transition-all tracking-widest ${activeTab === 'history' ? 'bg-blue-600 text-white shadow-xl shadow-blue-900/40' : 'text-slate-500'}`}
                     >
-                        Historial ({historyBets.length})
+                        HISTORIAL ({historyBets.length})
                     </button>
                 </div>
 
-                {/* List Content */}
-                <div className="flex flex-col gap-3 min-h-[200px]">
-                    {activeTab === 'active' ? (
-                        activeBets.length > 0 ? (
-                            activeBets.map((bet) => (
-                                <div key={bet.id} onClick={() => navigate(`/market/${bet.id}`)} className="flex flex-col gap-3 rounded-xl bg-[#15171b] p-4 shadow-sm border border-white/5 cursor-pointer active:bg-[#1a1d21] transition-all hover:border-white/10 group">
-                                    <div className="flex justify-between items-start gap-3">
-                                        <p className="text-[15px] font-semibold leading-snug line-clamp-2 flex-1 text-slate-200 group-hover:text-white transition-colors">
-                                            {bet.title}
-                                        </p>
-                                        <span className="text-[9px] font-bold text-white bg-blue-600 px-1.5 py-0.5 rounded uppercase shrink-0">Activo</span>
-                                    </div>
-
-                                    <div className="grid grid-cols-2 gap-4 pt-3 border-t border-white/5 mt-1">
-                                        <div>
-                                            <span className="text-[9px] text-slate-500 block uppercase font-bold mb-1">Tu Posición</span>
-                                            <div className="flex items-center gap-1.5">
-                                                <span className={`font-bold text-xs px-1.5 py-0.5 rounded border ${bet.outcome === 'SÍ' ? 'text-emerald-500 bg-emerald-500/10 border-emerald-500/20' : 'text-red-500 bg-red-500/10 border-red-500/20'}`}>{bet.outcome}</span>
-                                                <span className="text-xs font-medium text-slate-300">{bet.amount} Ξ</span>
+                {/* Content */}
+                <div className="space-y-4">
+                    {loading ? (
+                        [1, 2, 3].map(i => <div key={i} className="h-28 bg-[#15171b] rounded-3xl animate-pulse border border-white/5"></div>)
+                    ) : (
+                        activeTab === 'active' ? (
+                            activeBets.length > 0 ? (
+                                activeBets.map((bet) => (
+                                    <div key={bet.id} onClick={() => navigate(`/market/${bet.id}`)} className="bg-[#15171b] rounded-3xl p-5 border border-white/5 active:scale-[0.98] transition-all cursor-pointer shadow-sm relative overflow-hidden group">
+                                        <div className="flex justify-between items-start mb-4">
+                                            <h3 className="text-sm font-black leading-tight text-white/90 group-hover:text-white transition-colors flex-1 pr-4">{bet.title}</h3>
+                                            <span className={`text-[8px] font-black px-2 py-1 rounded border ${bet.outcome === 'SÍ' ? 'text-emerald-500 border-emerald-500/20 bg-emerald-500/5' : 'text-red-500 border-red-500/20 bg-red-500/5'}`}>{bet.outcome}</span>
+                                        </div>
+                                        <div className="flex justify-between items-end">
+                                            <div className="flex flex-col">
+                                                <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Acciones</span>
+                                                <span className="text-base font-black text-white">{bet.amount} POS</span>
+                                            </div>
+                                            <div className="flex flex-col items-end">
+                                                <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Inversión</span>
+                                                <span className="text-base font-black text-white">${bet.amount}</span>
                                             </div>
                                         </div>
-                                        <div className="text-right">
-                                            <span className="text-[9px] text-slate-500 block uppercase font-bold mb-1">Monto Apostado</span>
-                                            <span className="text-sm font-bold text-white">{bet.amount} ETH</span>
-                                        </div>
                                     </div>
-                                </div>
-                            ))
+                                ))
+                            ) : (
+                                <EmptyState message="Sin posiciones" sub="Tus predicciones reales aparecerán aquí cuando operes." icon="explore" />
+                            )
                         ) : (
-                            <EmptyState
-                                message="Sin predicciones activas"
-                                sub="Tus apuestas en el mercado real aparecerán aquí."
-                                icon="rocket_launch"
-                            />
-                        )
-                    ) : (
-                        historyBets.length > 0 ? (
                             historyBets.map((bet) => (
-                                <div key={bet.id} className="flex flex-col gap-3 rounded-xl bg-[#15171b]/50 p-4 border border-white/5 opacity-80">
-                                    <p className="text-[15px] font-semibold text-slate-400">{bet.title}</p>
-                                    <div className="flex justify-between items-center pt-2">
-                                        <span className="text-xs text-slate-500">Resultado: Pendiente</span>
-                                        <span className="text-xs font-bold text-slate-300">{bet.amount} ETH</span>
+                                <div key={bet.id} className="bg-[#15171b]/50 rounded-3xl p-5 border border-white/5 opacity-60 grayscale-[0.5]">
+                                    <h3 className="text-sm font-black text-slate-400 mb-3">{bet.title}</h3>
+                                    <div className="flex justify-between items-center">
+                                        <span className="text-[10px] font-black uppercase tracking-widest px-2 py-1 bg-white/5 rounded">Resolviendo...</span>
+                                        <span className="text-sm font-black">${bet.amount}</span>
                                     </div>
                                 </div>
                             ))
-                        ) : (
-                            <EmptyState
-                                message="Historial vacío"
-                                sub="Tus predicciones finalizadas aparecerán aquí."
-                                icon="history"
-                            />
                         )
                     )}
                 </div>
-            </div>
+            </main>
             <BottomNav />
         </div>
     );

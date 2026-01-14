@@ -24,28 +24,16 @@ import RankingScreen from './screens/RankingScreen';
 
 const PRIVY_APP_ID = (import.meta as any).env?.VITE_PRIVY_APP_ID || "cmkau6tu800wzjs0cyi73mu30";
 
-const polygonAmoy = {
-    id: 80002,
-    name: 'Polygon Amoy',
-    network: 'polygon-amoy',
+const polygon = {
+    id: 137,
+    name: 'Polygon',
+    network: 'polygon',
     nativeCurrency: { name: 'MATIC', symbol: 'MATIC', decimals: 18 },
     rpcUrls: {
-        default: { http: ['https://rpc-amoy.polygon.technology'] },
-        public: { http: ['https://rpc-amoy.polygon.technology'] },
+        default: { http: ['https://polygon-rpc.com'] },
+        public: { http: ['https://polygon-rpc.com'] },
     },
-    testnet: true,
-};
-
-const sepolia = {
-    id: 11155111,
-    name: 'Sepolia',
-    network: 'sepolia',
-    nativeCurrency: { name: 'Ether', symbol: 'ETH', decimals: 18 },
-    rpcUrls: {
-        default: { http: ['https://rpc.sepolia.org'] },
-        public: { http: ['https://rpc.sepolia.org'] },
-    },
-    testnet: true,
+    testnet: false,
 };
 
 // --- App Shell to use Toast ---
@@ -57,10 +45,10 @@ const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) => {
                 {children}
 
                 {toastMsg && (
-                    <div className="fixed top-20 left-1/2 -translate-x-1/2 z-[200] animate-fade-in w-full max-w-[400px] px-4 pointer-events-none">
-                        <div className="bg-[#1e293b] text-white px-4 py-3 rounded-xl shadow-2xl border border-white/10 flex items-center gap-3">
-                            <span className="material-symbols-outlined text-blue-400 text-[20px]">info</span>
-                            <span className="text-sm font-medium tracking-wide">{toastMsg}</span>
+                    <div className="fixed top-20 left-1/2 -translate-x-1/2 z-[300] animate-fade-in w-full max-w-[440px] px-4">
+                        <div className="bg-[#1e293b] text-white px-5 py-3 rounded-2xl shadow-2xl border border-white/10 flex items-center gap-3 backdrop-blur-md">
+                            <span className="material-symbols-outlined text-blue-400">info</span>
+                            <span className="text-sm font-bold">{toastMsg}</span>
                         </div>
                     </div>
                 )}
@@ -85,8 +73,8 @@ const App: React.FC = () => {
                         createOnLogin: 'users-without-wallets',
                     }
                 },
-                defaultChain: sepolia,
-                supportedChains: [sepolia, polygonAmoy],
+                defaultChain: polygon,
+                supportedChains: [polygon],
             }}
         >
             <UserProvider>
@@ -95,7 +83,6 @@ const App: React.FC = () => {
                         <Router>
                             <AppShell>
                                 <Routes>
-                                    {/* Home is now the main entry point (Inicio) */}
                                     <Route path="/" element={<HomeScreen />} />
                                     <Route path="/login" element={<OnboardingScreen />} />
                                     <Route path="/home" element={<Navigate to="/" replace />} />
