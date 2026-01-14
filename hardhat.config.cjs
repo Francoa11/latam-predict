@@ -11,6 +11,11 @@ module.exports = {
             url: "https://ethereum-sepolia-rpc.publicnode.com",
             accounts: PRIVATE_KEY ? [PRIVATE_KEY] : [],
         },
+        polygon: {
+            url: "https://polygon-rpc.com",
+            chainId: 137,
+            accounts: PRIVATE_KEY ? [PRIVATE_KEY] : [],
+        },
         antigravity: {
             url: "https://rpc.antigravity.network",
             accounts: PRIVATE_KEY ? [PRIVATE_KEY] : [],

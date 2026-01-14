@@ -31,16 +31,30 @@ const ExploreScreen: React.FC = () => {
                             const y = Number(ethers.formatUnits(m.yesVotes, 6));
                             const n = Number(ethers.formatUnits(m.noVotes, 6));
                             const total = y + n;
+                            const title = m.question;
+
+                            // Simple heuristic for category
+                            let cat = "General";
+                            const t = title.toLowerCase();
+                            if (t.includes("bitcoin") || t.includes("crypto") || t.includes("btc") || t.includes("eth")) cat = "Cripto";
+                            else if (t.includes("argentina") || t.includes("mundial") || t.includes("messi") || t.includes("fútbol")) cat = "Deportes";
+                            else if (t.includes("inflación") || t.includes("dólar") || t.includes("economía") || t.includes("pbi")) cat = "Economía";
+                            else if (t.includes("elon") || t.includes("mars") || t.includes("tech") || t.includes("ai")) cat = "Tech";
+                            else if (t.includes("elecciones") || t.includes("política") || t.includes("presidente")) cat = "Política";
+
                             return {
                                 id: Number(m.id),
-                                title: m.question,
-                                category: "Blockchain",
+                                title: title,
+                                category: cat,
                                 yes: total === 0 ? 50 : Math.round((y / total) * 100),
                                 vol: total.toFixed(2) + " vol",
-                                img: `https://picsum.photos/seed/${Number(m.id)}/100`
+                                img: `https://picsum.photos/seed/${Number(m.id)}/200`
                             };
                         });
-                        setMarkets([...formatted, ...mocks]);
+                        // Combine with mocks if needed, or just use real data. 
+                        // For now, let's show Real Data FIRST, then Mocks if you want, or just Real.
+                        // User wants to see the Seed markets.
+                        setMarkets(formatted);
                     } else {
                         setMarkets(mocks);
                     }
@@ -48,7 +62,13 @@ const ExploreScreen: React.FC = () => {
                     setMarkets(mocks);
                 }
             } catch (e) {
-                console.error(e);
+                console.error("Failed to load markets:", e);
+                // Fallback to mocks on error so screen is never empty
+                setMarkets([
+                    { id: "m1", title: "¿Bitcoin superará los $150k en 2026?", category: "Cripto", yes: 65, vol: "128.5 Ξ", img: "https://picsum.photos/seed/btc/100" },
+                    { id: "m2", title: "¿Argentina ganará el mundial 2026?", category: "Deportes", yes: 48, vol: "450.0 Ξ", img: "https://picsum.photos/seed/arg/100" },
+                    { id: "m3", title: "¿Elon Musk llegará a Marte antes de 2027?", category: "Tech", yes: 12, vol: "89.1 Ξ", img: "https://picsum.photos/seed/mars/100" }
+                ]);
             } finally {
                 setLoading(false);
             }

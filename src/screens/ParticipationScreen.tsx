@@ -18,6 +18,62 @@ const ParticipationScreen: React.FC = () => {
     const [balance, setBalance] = useState<bigint>(BigInt(0));
     const [loadingBalance, setLoadingBalance] = useState(false);
 
+    // Potentials
+    const [poolData, setPoolData] = useState<{ yes: number, no: number }>({ yes: 0, no: 0 });
+    const [potentialInfo, setPotentialInfo] = useState({ total: "0.00", profit: 0, roi: 0 });
+
+    useEffect(() => {
+        const fetchPool = async () => {
+            if (contract && id) {
+                try {
+                    // Fetch market data directly to ensure freshness
+                    const m = await contract.markets(id);
+                    // m.yesVotes and m.noVotes are indices 5 and 6 in struct (approximated, or accessing by name if supported)
+                    // ethers v6 struct result supports .name access
+                    setPoolData({
+                        yes: Number(ethers.formatUnits(m.yesVotes, 6)),
+                        no: Number(ethers.formatUnits(m.noVotes, 6))
+                    });
+                } catch (e) { console.error("Pool fetch error", e); }
+            }
+        };
+        fetchPool();
+    }, [contract, id]);
+
+    useEffect(() => {
+        const amt = Number(amount);
+        if (!amt || amt <= 0) {
+            setPotentialInfo({ total: "0.00", profit: 0, roi: 0 });
+            return;
+        }
+
+        // Parimutuel Calc
+        // If I bet on YES: My Share = Amt / (YesPool + Amt). Payout = Share * (TotalPool + Amt)
+        // Payout = (Amt * (YesPool + NoPool + Amt)) / (YesPool + Amt)
+        // Profit = Payout - Amt
+        const Y = poolData.yes;
+        const N = poolData.no;
+
+        let payout = 0;
+        if (side === 1) { // Betting YES
+            payout = (amt * (Y + N + amt)) / (Y + amt);
+        } else { // Betting NO
+            payout = (amt * (Y + N + amt)) / (N + amt);
+        }
+
+        // Safety for initial markets with 0 liquidity (handling NaN/Inf)
+        if (isNaN(payout) || !payout) payout = amt; // Fallback: 1x if alone
+
+        const profit = payout - amt;
+        const roi = (profit / amt) * 100;
+
+        setPotentialInfo({
+            total: payout.toFixed(2),
+            profit: Number(profit.toFixed(2)),
+            roi: Number(roi.toFixed(1))
+        });
+    }, [amount, side, poolData]);
+
     useEffect(() => {
         const fetchBalance = async () => {
             if (account && getERC20Contract) {
@@ -120,17 +176,24 @@ const ParticipationScreen: React.FC = () => {
             </header>
 
             <main className="flex-1 overflow-y-auto px-6 py-8 w-full max-w-[480px] mx-auto">
-                {/* Visual Card */}
-                <div className={`p-6 rounded-[32px] mb-8 relative overflow-hidden transition-all border ${side === 1 ? 'bg-emerald-500/10 border-emerald-500/20' : 'bg-red-500/10 border-red-500/20'}`}>
-                    <div className="flex justify-between items-center relative z-10">
-                        <div>
-                            <span className="text-[10px] font-black uppercase tracking-widest text-slate-500 block mb-1">Predicción</span>
-                            <h3 className="text-2xl font-black">{side === 1 ? 'SÍ sucederá' : 'NO sucederá'}</h3>
-                        </div>
-                        <span className={`material-symbols-outlined text-4xl ${side === 1 ? 'text-emerald-500' : 'text-red-500'}`}>
-                            {side === 1 ? 'thumb_up' : 'thumb_down'}
-                        </span>
-                    </div>
+                {/* Visual Card with Toggle */}
+                <div className="grid grid-cols-2 gap-3 mb-8">
+                    <button
+                        onClick={() => setSide(1)}
+                        className={`p-6 rounded-[24px] border transition-all relative overflow-hidden flex flex-col items-center justify-center gap-2 ${side === 1 ? 'bg-emerald-500/10 border-emerald-500 text-emerald-500' : 'bg-[#15171b] border-white/5 text-slate-500 hover:bg-white/5'}`}
+                    >
+                        <span className="material-symbols-outlined text-4xl">thumb_up</span>
+                        <span className="text-xs font-black uppercase tracking-widest">SÍ SUCEDERÁ</span>
+                        {side === 1 && <div className="absolute inset-0 border-2 border-emerald-500 rounded-[24px]"></div>}
+                    </button>
+                    <button
+                        onClick={() => setSide(0)}
+                        className={`p-6 rounded-[24px] border transition-all relative overflow-hidden flex flex-col items-center justify-center gap-2 ${side === 0 ? 'bg-red-500/10 border-red-500 text-red-500' : 'bg-[#15171b] border-white/5 text-slate-500 hover:bg-white/5'}`}
+                    >
+                        <span className="material-symbols-outlined text-4xl">thumb_down</span>
+                        <span className="text-xs font-black uppercase tracking-widest">NO SUCEDERÁ</span>
+                        {side === 0 && <div className="absolute inset-0 border-2 border-red-500 rounded-[24px]"></div>}
+                    </button>
                 </div>
 
                 <div className="space-y-8">
@@ -145,7 +208,7 @@ const ParticipationScreen: React.FC = () => {
                                 type="number"
                                 value={amount}
                                 onChange={(e) => setAmount(e.target.value)}
-                                className="w-full bg-[#15171b] border border-white/10 rounded-3xl p-8 text-5xl font-black text-white text-center outline-none focus:border-blue-500 transition-all shadow-inner"
+                                className={`w-full bg-[#15171b] border rounded-3xl p-8 text-5xl font-black text-white text-center outline-none transition-all shadow-inner ${side === 1 ? 'focus:border-emerald-500 border-emerald-500/20' : 'focus:border-red-500 border-red-500/20'}`}
                                 placeholder="0"
                             />
                             <div className="absolute right-6 top-1/2 -translate-y-1/2 flex flex-col items-center">
@@ -153,12 +216,34 @@ const ParticipationScreen: React.FC = () => {
                             </div>
                         </div>
                         <div className="grid grid-cols-4 gap-3">
-                            {['1', '10', '50', '100'].map(v => (
+                            {['5', '20', '50', '100'].map(v => (
                                 <button key={v} onClick={() => setAmount(v)} className="py-3.5 bg-white/5 hover:bg-white/10 rounded-2xl border border-white/5 text-xs font-black transition-all active:scale-95">
                                     ${v}
                                 </button>
                             ))}
                         </div>
+                    </div>
+
+                    {/* Potential Winnings */}
+                    <div className="bg-[#15171b] rounded-3xl p-6 border border-white/5 relative overflow-hidden">
+                        <div className={`absolute top-0 left-0 w-1 h-full ${side === 1 ? 'bg-emerald-500' : 'bg-red-500'}`}></div>
+                        <div className="flex justify-between items-start mb-2">
+                            <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Ganancia Potencial Estimada</span>
+                            <span className={`text-xs font-bold px-2 py-0.5 rounded-md ${side === 1 ? 'bg-emerald-500/10 text-emerald-500' : 'bg-red-500/10 text-red-500'}`}>
+                                {side === 1 ? 'APOSTANDO AL SÍ' : 'APOSTANDO AL NO'}
+                            </span>
+                        </div>
+                        <div className="flex items-baseline gap-2">
+                            <h3 className="text-3xl font-black text-white">
+                                ${potentialInfo.total}
+                            </h3>
+                            <span className={`text-sm font-bold ${potentialInfo.roi >= 0 ? 'text-emerald-400' : 'text-slate-500'}`}>
+                                ({potentialInfo.profit > 0 ? '+' : ''}{potentialInfo.profit})
+                            </span>
+                        </div>
+                        <p className="text-[10px] text-slate-500 mt-2 leading-relaxed">
+                            Calculado según la liquidez actual del mercado. Si ganas, recibirás tu parte proporcional del pozo total.
+                        </p>
                     </div>
 
                     {/* Token & Fee Info */}
